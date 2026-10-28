@@ -1,1 +1,9 @@
-__pycache__/\n.venv/\nvenv/\n.env\nuploads/*\noutputs/*\n!uploads/.gitkeep\n!outputs/.gitkeep\n
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.modal/
+uploads/*
+!uploads/.gitkeep
+outputs/*
+!outputs/.gitkeep
