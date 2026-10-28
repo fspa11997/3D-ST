@@ -1,0 +1,1 @@
+__pycache__/\n.venv/\nvenv/\n.env\nuploads/*\noutputs/*\n!uploads/.gitkeep\n!outputs/.gitkeep\n
