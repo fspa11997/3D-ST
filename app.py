@@ -96,17 +96,13 @@ def create_colab_notebook(image_path, original_name, notebook_path):
             "La fotografía está incluida en este cuaderno; no necesitas volver a subirla. "
             "La instalación puede tardar varios minutos y la disponibilidad gratuita de GPU no está garantizada."
         ]},
-        {"cell_type": "markdown", "metadata": {}, "source": ["## 1. Preparar el entorno de TripoSR\n", "Esta celda usa el Python disponible en Colab y crea un entorno que reutiliza el PyTorch/CUDA preinstalado; no requiere una ruta fija a Python 3.11."]},
+        {"cell_type": "markdown", "metadata": {}, "source": ["## 1. Preparar el entorno de TripoSR\n", "Esta celda usa el Python y PyTorch que ya trae Colab; no crea un entorno virtual ni depende de una ruta fija."]},
         {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": [
             "import os, pathlib, subprocess, sys\n",
             "def ejecutar(cmd):\n",
             "    print('$', ' '.join(cmd))\n",
             "    subprocess.run(cmd, check=True)\n",
-            "VENV = '/content/triposr-env'\n",
-            "if not pathlib.Path(VENV, 'bin', 'python').exists():\n",
-            "    ejecutar([sys.executable, '-m', 'venv', '--system-site-packages', VENV])\n",
-            "PY = str(pathlib.Path(VENV, 'bin', 'python'))\n",
-            "ejecutar([PY, '-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel'])\n",
+            "PY = sys.executable\\n",
             "ejecutar([PY, '-m', 'pip', 'install', '--upgrade', 'scikit-build-core', 'pybind11', 'ninja', 'cmake'])\n",
             "ejecutar([PY, '-m', 'pip', 'install', '--no-cache-dir', '--no-build-isolation', 'git+https://github.com/tatsy/torchmcubes.git'])\n",
             "ejecutar([PY, '-m', 'pip', 'install', 'omegaconf==2.3.0', 'Pillow==10.1.0', 'einops==0.7.0', 'transformers==4.35.0', 'trimesh==4.0.5', 'rembg', 'onnxruntime', 'huggingface-hub', 'imageio[ffmpeg]', 'gradio', 'xatlas==0.0.9', 'moderngl==5.10.0'])\n",
@@ -132,7 +128,7 @@ def create_colab_notebook(image_path, original_name, notebook_path):
         {"cell_type": "markdown", "metadata": {}, "source": ["## 3. Generar el modelo 3D\n", "TripoSR estima la geometría a partir de la fotografía. El resultado no garantiza dimensiones exactas ni que la malla esté lista para impresión sin revisión."]},
         {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": [
             "import pathlib, subprocess, os\n",
-            "PY = '/content/triposr-env/bin/python'\n",
+            "PY = sys.executable\\n",
             "SALIDA = '/content/3dst-output'\n",
             "os.makedirs(SALIDA, exist_ok=True)\n",
             "comando = [PY, '/content/TripoSR/run.py', str(imagen), '--output-dir', SALIDA, '--model-save-format', 'glb']\n",
