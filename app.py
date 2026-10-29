@@ -1,6 +1,9 @@
 import os
 import uuid
 import secrets
+import base64
+import json
+import mimetypes
 from pathlib import Path
 
 import requests
@@ -13,7 +16,7 @@ UPLOADS.mkdir(exist_ok=True)
 OUTPUTS.mkdir(exist_ok=True)
 
 ALLOWED = {"png", "jpg", "jpeg", "webp"}
-MODE = os.getenv("GENERATOR_MODE", "remote").lower()
+MODE = os.getenv("GENERATOR_MODE", "colab").lower()
 GPU_API_URL = os.getenv("GPU_API_URL", "").strip().rstrip("/")
 GPU_API_TOKEN = os.getenv("GPU_API_TOKEN", "").strip()
 
@@ -74,6 +77,94 @@ def remote_generator(src, dst):
         raise RuntimeError(f"No se pudo conectar con el servidor GPU: {exc}") from exc
 
 
+
+def create_colab_notebook(image_path, original_name, notebook_path):
+    """Create a Colab notebook that carries the uploaded image inside it."""
+    image_bytes = image_path.read_bytes()
+    image_b64 = base64.b64encode(image_bytes).decode("ascii")
+    mime = mimetypes.guess_type(original_name)[0] or "application/octet-stream"
+    safe_name = secure_filename(original_name) or "imagen.png"
+    # Image data is embedded so the user does not need to upload the same photo twice.
+    cells = [
+        {"cell_type": "markdown", "metadata": {}, "source": [
+            "# 3D-ST · Generar modelo 3D desde tu fotografía\n",
+            "\n",
+            "Este cuaderno fue preparado por 3D-ST con la fotografía que seleccionaste. "
+            "En Colab elige **Entorno de ejecución → Cambiar tipo de entorno de ejecución → GPU** "
+            "si hay una GPU disponible y después usa **Entorno de ejecución → Ejecutar todo**.\n",
+            "\n",
+            "La fotografía está incluida en este cuaderno; no necesitas volver a subirla. "
+            "La instalación puede tardar varios minutos y la disponibilidad gratuita de GPU no está garantizada."
+        ]},
+        {"cell_type": "markdown", "metadata": {}, "source": ["## 1. Preparar el entorno de TripoSR\n", "Esta celda instala las dependencias en un entorno separado para evitar modificar el Python base de Colab."]},
+        {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": [
+            "import os, pathlib, subprocess, sys\n",
+            "def ejecutar(cmd):\n",
+            "    print('$', ' '.join(cmd))\n",
+            "    subprocess.run(cmd, check=True)\n",
+            "py311 = '/usr/bin/python3.11'\n",
+            "if not pathlib.Path(py311).exists():\n",
+            "    raise RuntimeError('Esta sesión de Colab no tiene Python 3.11 en /usr/bin/python3.11. Cambia a un entorno de ejecución compatible e inténtalo de nuevo.')\n",
+            "if not pathlib.Path('/content/triposr-env/bin/python').exists():\n",
+            "    ejecutar([py311, '-m', 'venv', '/content/triposr-env'])\n",
+            "PY = '/content/triposr-env/bin/python'\n",
+            "ejecutar([PY, '-m', 'pip', 'install', '--upgrade', 'pip', 'setuptools', 'wheel'])\n",
+            "ejecutar([PY, '-m', 'pip', 'install', 'torch==2.11.0', 'torchvision', '--index-url', 'https://download.pytorch.org/whl/cu130'])\n",
+            "ejecutar([PY, '-m', 'pip', 'install', '--upgrade', 'scikit-build-core', 'pybind11', 'ninja', 'cmake'])\n",
+            "ejecutar([PY, '-m', 'pip', 'install', '--no-cache-dir', '--no-build-isolation', 'git+https://github.com/tatsy/torchmcubes.git'])\n",
+            "ejecutar([PY, '-m', 'pip', 'install', 'omegaconf==2.3.0', 'Pillow==10.1.0', 'einops==0.7.0', 'transformers==4.35.0', 'trimesh==4.0.5', 'rembg', 'onnxruntime', 'huggingface-hub', 'imageio[ffmpeg]', 'gradio', 'xatlas==0.0.9', 'moderngl==5.10.0'])\n",
+            "if not pathlib.Path('/content/TripoSR/run.py').exists():\n",
+            "    ejecutar(['git', 'clone', 'https://github.com/VAST-AI-Research/TripoSR.git', '/content/TripoSR'])\n",
+            "ejecutar([PY, '-c', \"import torch, torchmcubes, rembg, onnxruntime; print('PyTorch:', torch.__version__); print('CUDA:', torch.version.cuda); print('GPU disponible:', torch.cuda.is_available()); print('Dependencias: OK')\"])\n",
+            "try:\n",
+            "    subprocess.run(['nvidia-smi'], check=True)\n",
+            "except Exception:\n",
+            "    print('No se detectó una GPU NVIDIA. Si Colab ofrece GPU, actívala en Entorno de ejecución → Cambiar tipo de entorno de ejecución.')\n",
+            "print('Entorno preparado.')"
+        ]},
+        {"cell_type": "markdown", "metadata": {}, "source": ["## 2. Recuperar la fotografía que seleccionaste en 3D-ST"]},
+        {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": [
+            "import base64, pathlib\n",
+            f"nombre_imagen = {json.dumps(safe_name, ensure_ascii=False)}\n",
+            f"mime_imagen = {json.dumps(mime)}\n",
+            f"imagen_b64 = {json.dumps(image_b64)}\n",
+            "imagen = pathlib.Path('/content') / nombre_imagen\n",
+            "imagen.write_bytes(base64.b64decode(imagen_b64))\n",
+            "print('Fotografía lista:', imagen.name, '-', round(imagen.stat().st_size / 1024, 1), 'KB')"
+        ]},
+        {"cell_type": "markdown", "metadata": {}, "source": ["## 3. Generar el modelo 3D\n", "TripoSR estima la geometría a partir de la fotografía. El resultado no garantiza dimensiones exactas ni que la malla esté lista para impresión sin revisión."]},
+        {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": [
+            "import pathlib, subprocess, os\n",
+            "PY = '/content/triposr-env/bin/python'\n",
+            "SALIDA = '/content/3dst-output'\n",
+            "os.makedirs(SALIDA, exist_ok=True)\n",
+            "comando = [PY, '/content/TripoSR/run.py', str(imagen), '--output-dir', SALIDA, '--model-save-format', 'glb']\n",
+            "print('Generando el modelo 3D...')\n",
+            "subprocess.run(comando, check=True)\n",
+            "archivos = [p for p in pathlib.Path(SALIDA).rglob('*') if p.is_file()]\n",
+            "if not archivos:\n",
+            "    raise FileNotFoundError('TripoSR terminó, pero no se encontraron archivos de salida.')\n",
+            "for archivo in archivos:\n",
+            "    print(archivo, f'({archivo.stat().st_size / 1024:.1f} KB)')"
+        ]},
+        {"cell_type": "markdown", "metadata": {}, "source": ["## 4. Descargar el proyecto 3D\n", "Al ejecutar esta celda, Colab descargará los modelos GLB/OBJ que se hayan generado."]},
+        {"cell_type": "code", "execution_count": None, "metadata": {}, "outputs": [], "source": [
+            "from google.colab import files\n",
+            "import pathlib\n",
+            "salida = pathlib.Path('/content/3dst-output')\n",
+            "modelos = list(salida.rglob('*.glb')) + list(salida.rglob('*.obj'))\n",
+            "if not modelos:\n",
+            "    raise FileNotFoundError('No se encontró ningún archivo GLB u OBJ.')\n",
+            "for modelo in modelos:\n",
+            "    print('Descargando:', modelo.name)\n",
+            "    files.download(str(modelo))"
+        ]},
+        {"cell_type": "markdown", "metadata": {}, "source": ["### Nota\n", "Google Colab puede no ofrecer GPU en todas las sesiones y puede terminar sesiones inactivas. Una sola fotografía solo muestra una parte del objeto, por lo que la IA estima las zonas que no se ven."]}
+    ]
+    notebook = {"cells": cells, "metadata": {"colab": {"name": "3D-ST - " + safe_name, "provenance": []}, "kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"}, "language_info": {"name": "python"}}, "nbformat": 4, "nbformat_minor": 5}
+    notebook_path.write_text(json.dumps(notebook, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
@@ -92,15 +183,27 @@ def index():
         file.save(src)
 
         try:
-            if MODE == "demo":
+            if MODE == "colab":
+                notebook_name = job + ".ipynb"
+                notebook_path = OUTPUTS / notebook_name
+                create_colab_notebook(src, file.filename, notebook_path)
+                return render_template(
+                    "result.html",
+                    notebook=notebook_name,
+                    image_name=secure_filename(file.filename) or "imagen",
+                    colab=True,
+                    status="Tu fotografía quedó incluida en un cuaderno de Colab. Descárgalo, súbelo a Colab y ejecuta las celdas en orden para obtener el modelo 3D.",
+                    demo=False,
+                )
+            elif MODE == "demo":
                 demo_obj(dst)
                 status = "Modo demostración: se creó un cubo OBJ. No es una reconstrucción de la imagen."
             elif MODE == "remote":
                 remote_generator(src, dst)
                 status = "Modelo 3D generado por TripoSR correctamente."
             else:
-                raise RuntimeError("GENERATOR_MODE no válido. Usa 'remote' o 'demo'.")
-            return render_template("result.html", filename=dst.name, status=status, demo=(MODE == "demo"))
+                raise RuntimeError("GENERATOR_MODE no válido. Usa 'colab', 'remote' o 'demo'.")
+            return render_template("result.html", filename=dst.name, status=status, demo=(MODE == "demo"), colab=False)
         except Exception as exc:
             app.logger.exception("Fallo al generar modelo")
             flash(str(exc), "error")
@@ -114,6 +217,18 @@ def index():
     return render_template("index.html", max_mb=os.getenv("MAX_UPLOAD_MB", "12"))
 
 
+@app.route("/download-notebook/<filename>")
+def download_notebook(filename):
+    if not filename.endswith(".ipynb") or Path(filename).name != filename:
+        flash("Cuaderno no válido.", "error")
+        return redirect(url_for("index"))
+    path = OUTPUTS / filename
+    if not path.is_file():
+        flash("El cuaderno ya no está disponible. Vuelve a seleccionar la imagen.", "error")
+        return redirect(url_for("index"))
+    return send_file(path, as_attachment=True, download_name="3D-ST-Colab.ipynb", mimetype="application/x-ipynb+json")
+
+
 @app.route("/download/<filename>")
 def download(filename):
     if not filename.endswith(".obj") or Path(filename).name != filename:
@@ -124,21 +239,6 @@ def download(filename):
         flash("El archivo ya no está disponible.", "error")
         return redirect(url_for("index"))
     return send_file(path, as_attachment=True, download_name="modelo_3d.obj", mimetype="text/plain")
-
-
-@app.route("/descargar-cuaderno-colab")
-def descargar_cuaderno_colab():
-    """Descarga el cuaderno interactivo para ejecutar TripoSR en Google Colab."""
-    notebook = BASE / "notebooks" / "3D-ST-TripoSR-Colab.ipynb"
-    if not notebook.is_file():
-        flash("No se encontró el cuaderno de Google Colab.", "error")
-        return redirect(url_for("index"))
-    return send_file(
-        notebook,
-        as_attachment=True,
-        download_name="3D-ST-TripoSR-Colab.ipynb",
-        mimetype="application/x-ipynb+json",
-    )
 
 
 @app.route("/health")

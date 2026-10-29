@@ -7,21 +7,14 @@ import modal
 
 app = modal.App("3d-st-triposr")
 
-# TripoSR se ejecuta en Modal con GPU. Railway conserva solamente la web.
-# CUDA 12.6 + PyTorch cu126: torchmcubes requiere CUDA 12 o posterior para compilar su backend GPU.
+# TripoSR's official requirements are installed in a separate GPU container.
+# The web app on Railway does NOT install PyTorch or run the model itself.
 image = (
-    modal.Image.from_registry(
-        "nvidia/cuda:12.6.3-devel-ubuntu22.04",
-        add_python="3.11",
-    )
-    .entrypoint([])
-    .apt_install("git", "build-essential", "cmake", "gcc-11", "g++-11")
-    .env({"CC": "/usr/bin/gcc-11", "CXX": "/usr/bin/g++-11"})
-    .run_commands(
-        "python -m pip install --no-cache-dir --upgrade pip setuptools wheel",
-        "python -m pip install --no-cache-dir torch==2.6.0+cu126 torchvision==0.21.0+cu126 --index-url https://download.pytorch.org/whl/cu126",
-    )
+    modal.Image.debian_slim(python_version="3.10")
+    .apt_install("git", "build-essential")
     .pip_install(
+        "torch",
+        "torchvision",
         "fastapi",
         "python-multipart",
         "Pillow==10.1.0",
@@ -29,29 +22,19 @@ image = (
         "einops==0.7.0",
         "transformers==4.35.0",
         "trimesh==4.0.5",
-        "rembg==2.0.57",
-        "huggingface-hub==0.17.3",
+        "rembg",
+        "huggingface-hub<1.0",
         "setuptools>=49.6.0",
         "imageio[ffmpeg]",
         "xatlas==0.0.9",
         "moderngl==5.10.0",
-        "numpy==1.26.4",
-        "scikit-build-core",
-        "pybind11",
-        "ninja",
+        "numpy<2",
     )
     .run_commands(
-        # Ubuntu 22.04 trae CMake 3.22; torchmcubes requiere CMake >= 3.24.
-        # Instalar CMake desde PyPI y verificar que esta versión quede en PATH.
-        "python -m pip install --no-cache-dir 'cmake>=3.24,<4.0'",
-        "cmake --version",
         "git clone --depth 1 https://github.com/VAST-AI-Research/TripoSR.git /opt/TripoSR",
-        "cd /opt/TripoSR && python -m pip install --no-build-isolation --no-cache-dir git+https://github.com/tatsy/torchmcubes.git",
-        # Verifica que PyTorch y la extensión se importen tras la compilación.
-        "python -c \"import torch; import torchmcubes; assert torch.version.cuda.startswith('12.6'), f'PyTorch CUDA inesperado: {torch.version.cuda}'; print('PyTorch CUDA:', torch.version.cuda, '| torchmcubes importado correctamente')\"",
+        "cd /opt/TripoSR && pip install git+https://github.com/tatsy/torchmcubes.git",
     )
 )
-
 
 @app.function(
     image=image,
@@ -62,24 +45,22 @@ image = (
 )
 @modal.asgi_app()
 def web():
-    import io
-    import sys
-
-    import numpy as np
-    import rembg
-    import torch
     from fastapi import FastAPI, File, Form, Header, HTTPException, UploadFile
     from fastapi.responses import Response
     from PIL import Image
+    import io
+    import sys
+    import torch
 
     sys.path.insert(0, "/opt/TripoSR")
     from tsr.system import TSR
-    from tsr.utils import remove_background as triposr_remove_background
-    from tsr.utils import resize_foreground
+    from tsr.utils import remove_background, resize_foreground
+    import numpy as np
+    import rembg
 
     api = FastAPI(title="3D-ST TripoSR GPU API")
 
-    # Se carga una sola vez por cada instancia activa de Modal.
+    # Load model once per warm worker; Modal scales workers down when idle.
     model = TSR.from_pretrained(
         "stabilityai/TripoSR",
         config_name="config.yaml",
@@ -105,34 +86,27 @@ def web():
             raise HTTPException(status_code=401, detail="No autorizado")
 
         raw = await image.read()
-        if not raw:
-            raise HTTPException(status_code=400, detail="La imagen está vacía")
-        if len(raw) > 12 * 1024 * 1024:
-            raise HTTPException(status_code=413, detail="La imagen supera los 12 MB")
+        if not raw or len(raw) > 12 * 1024 * 1024:
+            raise HTTPException(status_code=413, detail="Imagen vacía o superior a 12 MB")
 
         try:
             pil = Image.open(io.BytesIO(raw)).convert("RGBA")
             if remove_background:
-                processed = triposr_remove_background(pil, bg_session)
+                processed = remove_background_fn(pil, bg_session)
             else:
                 processed = np.array(pil.convert("RGB"))
-
             processed = resize_foreground(processed, 0.85)
-            arr = np.asarray(processed).astype(np.float32) / 255.0
+            arr = np.array(processed).astype(np.float32) / 255.0
             if arr.ndim == 3 and arr.shape[-1] == 4:
-                alpha = arr[:, :, 3:4]
-                arr = arr[:, :, :3] * alpha + (1.0 - alpha) * 0.5
-
-            processed_pil = Image.fromarray((arr * 255.0).clip(0, 255).astype(np.uint8))
+                arr = arr[:, :, :3] * arr[:, :, 3:4] + (1 - arr[:, :, 3:4]) * 0.5
+            processed_pil = Image.fromarray((arr * 255.0).astype(np.uint8))
             with torch.no_grad():
                 scene_codes = model([processed_pil], device="cuda:0")
                 meshes = model.extract_mesh(scene_codes, True, resolution=256)
-
             with tempfile.TemporaryDirectory() as tmp:
                 out = Path(tmp) / "mesh.obj"
                 meshes[0].export(str(out))
                 obj = out.read_bytes()
-
             return Response(
                 content=obj,
                 media_type="text/plain",
@@ -141,9 +115,10 @@ def web():
         except HTTPException:
             raise
         except Exception as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=f"Falló la generación TripoSR: {type(exc).__name__}: {exc}",
-            ) from exc
+            raise HTTPException(status_code=500, detail=f"Falló la generación TripoSR: {type(exc).__name__}: {exc}") from exc
+
+    # Avoid name shadowing with the multipart field named remove_background.
+    def remove_background_fn(pil, session):
+        return remove_background(pil, session)
 
     return api

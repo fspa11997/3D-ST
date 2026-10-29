@@ -1,30 +1,30 @@
-# 3D-ST — Imagen a 3D con Google Colab
+# 3D-ST — Imagen a modelo 3D con Google Colab
 
-La aplicación Flask presenta un flujo guiado para generar modelos 3D con TripoSR en un cuaderno interactivo de Google Colab. No se requiere contratar un servidor GPU para hacer pruebas.
+La aplicación Flask recibe una fotografía y crea un cuaderno `.ipynb` personalizado que incluye esa imagen y el código para ejecutar TripoSR en Google Colab. La aplicación web no necesita ejecutar una GPU ni generar el modelo en Railway.
 
-## Flujo de uso
-1. Abre la web de 3D-ST.
-2. Pulsa **Abrir cuaderno en Google Colab**. Si el cuaderno todavía no está publicado en GitHub, usa **Descargar cuaderno (.ipynb)** e impórtalo desde Archivo → Subir notebook en Colab.
-3. En Colab, activa una GPU si hay disponibilidad y ejecuta las celdas en orden.
-4. Selecciona una imagen cuando el cuaderno lo solicite.
-5. Descarga los modelos GLB u OBJ al terminar.
+## Flujo por defecto
+1. El usuario selecciona una imagen en la página de 3D-ST.
+2. Flask crea un cuaderno de Colab con la fotografía incrustada.
+3. El usuario descarga el cuaderno, abre Google Colab y usa **Archivo → Subir cuaderno**.
+4. En Colab activa una GPU si está disponible y selecciona **Entorno de ejecución → Ejecutar todo**.
+5. El cuaderno instala las dependencias, ejecuta TripoSR y descarga el resultado GLB.
 
-## Cuaderno
-`notebooks/3D-ST-TripoSR-Colab.ipynb` contiene la preparación del entorno, instalación de PyTorch/torchmcubes/TripoSR, carga de imagen, inferencia y descarga.
+## Configuración
+Por defecto `GENERATOR_MODE=colab`. Railway solo aloja la web y prepara el cuaderno. No hace falta configurar Modal ni `GPU_API_URL` para este flujo.
 
-## Publicar en GitHub
-Para que el botón **Abrir cuaderno en Google Colab** funcione directamente, sube el archivo del cuaderno a la rama `master` en la ruta `notebooks/3D-ST-TripoSR-Colab.ipynb`. La URL utilizada por la página apunta a esa ruta.
+Se mantienen los modos opcionales anteriores: `GENERATOR_MODE=remote` para un endpoint GPU externo, o `GENERATOR_MODE=demo` para un cubo OBJ de demostración.
 
-## Limitaciones
-- Google Colab gratuito no garantiza disponibilidad de GPU ni sesiones permanentes; el entorno puede terminarse y quizá sea necesario volver a instalar las dependencias.
-- La web no envía automáticamente la imagen a Colab. El usuario selecciona la imagen dentro del cuaderno y descarga allí el resultado.
-- TripoSR estima la forma a partir de una imagen. La malla puede necesitar reparación, escala y validación antes de imprimirla en 3D.
-- La app conserva el backend remoto previo como código, pero la interfaz principal ofrece el flujo de Colab; no se necesita configurar `GPU_API_URL` para utilizar el cuaderno.
-
-## Probar localmente
+## Ejecutar localmente
 ```powershell
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 python app.py
 ```
+
+## Limitaciones importantes
+- El cuaderno contiene la imagen que el usuario subió; el archivo `.ipynb` puede ser grande para fotografías grandes.
+- La primera ejecución descarga TripoSR y sus dependencias y puede tardar varios minutos.
+- La GPU gratuita de Colab no está garantizada y las sesiones pueden finalizarse.
+- Una sola fotografía produce una estimación de la geometría, no dimensiones exactas ni garantía de que la malla esté lista para impresión.
+- `outputs/` contiene cuadernos personalizados con imágenes incrustadas. En producción se debe establecer una política de limpieza periódica y limitar el tamaño de las imágenes.
