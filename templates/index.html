@@ -1,9 +1,34 @@
 <!doctype html>
-<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="theme-color" content="#102f50"><title>Imagen a 3D | OBJ</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
-<body><main class="shell">
-<header class="top"><div class="logo">3D</div><div><span class="eyebrow">HERRAMIENTA GRATUITA</span><h1>Imagen a <em>3D</em></h1></div></header>
-<section class="hero"><p class="tag">DE TU IMAGEN A UN MODELO</p><h2>Convierte una imagen en un archivo 3D.</h2><p class="intro">Sube una imagen y prepara el flujo para generar y descargar modelos OBJ, sin crear una cuenta.</p></section>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#102f50">
+<title>3D-ST | Generador 3D con Colab</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+<main class="shell">
+<header class="top"><div class="logo">3D</div><div><span class="eyebrow">GENERACIÓN CON GOOGLE COLAB</span><h1>3D-ST <em>Imagen a 3D</em></h1></div></header>
+<section class="hero">
+<p class="tag">SIN CONTRATAR UNA GPU REMOTA</p>
+<h2>Convierte una imagen en un modelo 3D.</h2>
+<p class="intro">Preparamos un cuaderno de Google Colab con TripoSR. Abre el cuaderno, inicia las celdas, sube tu imagen y descarga el modelo generado en GLB u OBJ.</p>
+</section>
 {% with messages = get_flashed_messages(with_categories=true) %}{% if messages %}{% for category, message in messages %}<div class="notice {{ category }}">{{ message }}</div>{% endfor %}{% endif %}{% endwith %}
-<form class="upload-card" method="post" enctype="multipart/form-data"><label class="dropzone" for="image"><span class="upload-icon">↑</span><strong>Selecciona una imagen</strong><span>PNG, JPG, JPEG o WebP · máximo {{ max_mb }} MB</span><input id="image" name="image" type="file" accept=".png,.jpg,.jpeg,.webp,image/png,image/jpeg,image/webp" required><span id="file-name" class="file-name">Ningún archivo seleccionado</span></label><button type="submit">Preparar modelo <span>→</span></button><p class="fineprint">Versión inicial: conecta un motor de IA 3D. El modo demostración se identifica claramente en el resultado.</p></form>
-<section class="steps"><div><span>01</span><strong>Sube tu imagen</strong><p>Un objeto claro y bien iluminado suele funcionar mejor.</p></div><div><span>02</span><strong>Genera el modelo</strong><p>El motor de IA se conecta como componente independiente.</p></div><div><span>03</span><strong>Descarga OBJ</strong><p>Abre el archivo en Blender u otro programa compatible.</p></div></section><footer>Python + Flask · Exportación OBJ</footer></main>
-<script>const input=document.getElementById('image');input.addEventListener('change',()=>document.getElementById('file-name').textContent=input.files.length?input.files[0].name:'Ningún archivo seleccionado');</script></body></html>
+<section class="upload-card colab-card">
+<div class="colab-note"><span class="upload-icon">✦</span><div><strong>Motor TripoSR preparado</strong><p>El procesamiento se ejecuta en tu sesión de Colab. No necesitas instalar Python ni CUDA en tu computador.</p></div></div>
+<a class="button-link" href="https://colab.research.google.com/github/fspa11997/3D-ST/blob/master/notebooks/3D-ST-TripoSR-Colab.ipynb" target="_blank" rel="noopener">Abrir cuaderno en Google Colab <span>↗</span></a>
+<a class="button-link secondary-button" href="{{ url_for('descargar_cuaderno_colab') }}">Descargar cuaderno (.ipynb) <span>↓</span></a>
+<p class="fineprint">Si el enlace de GitHub todavía no abre el cuaderno, descarga el archivo .ipynb e impórtalo en Colab desde Archivo → Subir notebook.</p>
+</section>
+<section class="steps">
+<div><span>01</span><strong>Abre el cuaderno</strong><p>Inicia sesión en Google Colab y activa una GPU si está disponible.</p></div>
+<div><span>02</span><strong>Ejecuta y sube tu imagen</strong><p>Ejecuta las celdas en orden. La primera prepara el motor y las siguientes te permiten seleccionar la imagen.</p></div>
+<div><span>03</span><strong>Descarga tu modelo</strong><p>El cuaderno genera el archivo 3D y ofrece la descarga en formato GLB u OBJ.</p></div>
+</section>
+<div class="notice warning">La GPU gratuita de Colab depende de la disponibilidad de Google. La pieza se genera dentro de Colab; esta web no mantiene un servidor GPU permanente ni recibe automáticamente el archivo generado.</div>
+<footer>3D-ST · Flask + TripoSR + Google Colab</footer>
+</main>
+</body>
+</html>

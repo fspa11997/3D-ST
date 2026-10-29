@@ -126,6 +126,21 @@ def download(filename):
     return send_file(path, as_attachment=True, download_name="modelo_3d.obj", mimetype="text/plain")
 
 
+@app.route("/descargar-cuaderno-colab")
+def descargar_cuaderno_colab():
+    """Descarga el cuaderno interactivo para ejecutar TripoSR en Google Colab."""
+    notebook = BASE / "notebooks" / "3D-ST-TripoSR-Colab.ipynb"
+    if not notebook.is_file():
+        flash("No se encontró el cuaderno de Google Colab.", "error")
+        return redirect(url_for("index"))
+    return send_file(
+        notebook,
+        as_attachment=True,
+        download_name="3D-ST-TripoSR-Colab.ipynb",
+        mimetype="application/x-ipynb+json",
+    )
+
+
 @app.route("/health")
 def health():
     return {"status": "ok", "generator_mode": MODE, "gpu_configured": bool(GPU_API_URL and GPU_API_TOKEN)}

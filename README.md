@@ -1,31 +1,30 @@
-# Imagen a 3D — 3D-ST + TripoSR
+# 3D-ST — Imagen a 3D con Google Colab
 
-La web Flask corre en Railway y delega la inferencia de IA a un endpoint GPU independiente en Modal.
+La aplicación Flask presenta un flujo guiado para generar modelos 3D con TripoSR en un cuaderno interactivo de Google Colab. No se requiere contratar un servidor GPU para hacer pruebas.
 
-## Arquitectura
-- `app.py`: carga de imagen, petición autenticada al endpoint GPU y descarga OBJ.
-- `gpu_worker/modal_app.py`: API Modal que carga TripoSR en una GPU T4, procesa una imagen y devuelve una malla OBJ.
-- `requirements.txt`: dependencias ligeras de la web (no incluye PyTorch ni CUDA).
-- `Procfile`: comando de inicio para Railway.
+## Flujo de uso
+1. Abre la web de 3D-ST.
+2. Pulsa **Abrir cuaderno en Google Colab**. Si el cuaderno todavía no está publicado en GitHub, usa **Descargar cuaderno (.ipynb)** e impórtalo desde Archivo → Subir notebook en Colab.
+3. En Colab, activa una GPU si hay disponibilidad y ejecuta las celdas en orden.
+4. Selecciona una imagen cuando el cuaderno lo solicite.
+5. Descarga los modelos GLB u OBJ al terminar.
 
-## Estado
-La aplicación web requiere un endpoint Modal desplegado y estas variables en Railway:
-- `GENERATOR_MODE=remote`
-- `GPU_API_URL=https://.../generate`
-- `GPU_API_TOKEN=...`
-- `SECRET_KEY=...`
+## Cuaderno
+`notebooks/3D-ST-TripoSR-Colab.ipynb` contiene la preparación del entorno, instalación de PyTorch/torchmcubes/TripoSR, carga de imagen, inferencia y descarga.
 
-Consulta `gpu_worker/README.md` para desplegar el motor y configurar los secretos.
+## Publicar en GitHub
+Para que el botón **Abrir cuaderno en Google Colab** funcione directamente, sube el archivo del cuaderno a la rama `master` en la ruta `notebooks/3D-ST-TripoSR-Colab.ipynb`. La URL utilizada por la página apunta a esa ruta.
 
-## Probar localmente la web
+## Limitaciones
+- Google Colab gratuito no garantiza disponibilidad de GPU ni sesiones permanentes; el entorno puede terminarse y quizá sea necesario volver a instalar las dependencias.
+- La web no envía automáticamente la imagen a Colab. El usuario selecciona la imagen dentro del cuaderno y descarga allí el resultado.
+- TripoSR estima la forma a partir de una imagen. La malla puede necesitar reparación, escala y validación antes de imprimirla en 3D.
+- La app conserva el backend remoto previo como código, pero la interfaz principal ofrece el flujo de Colab; no se necesita configurar `GPU_API_URL` para utilizar el cuaderno.
+
+## Probar localmente
 ```powershell
 py -m venv .venv
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
-$env:GENERATOR_MODE="demo"
 python app.py
 ```
-El modo demo genera un cubo y NO es una reconstrucción de la imagen. Para generación real necesitas configurar el endpoint Modal y usar `GENERATOR_MODE=remote`.
-
-## Nota sobre archivos
-Los archivos subidos se borran del servidor web después de la inferencia. Los OBJ se guardan temporalmente en `outputs/`; este prototipo aún necesita una política periódica de limpieza de modelos generados si se va a usar en producción.
