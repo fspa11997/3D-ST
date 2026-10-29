@@ -7,7 +7,7 @@ La aplicación Flask recibe una fotografía y crea un cuaderno `.ipynb` personal
 2. Flask crea un cuaderno de Colab con la fotografía incrustada.
 3. El usuario descarga el cuaderno, abre Google Colab y usa **Archivo → Subir cuaderno**.
 4. En Colab activa una GPU si está disponible y selecciona **Entorno de ejecución → Ejecutar todo**.
-5. El cuaderno instala las dependencias, ejecuta TripoSR y descarga el resultado GLB.
+5. El cuaderno instala las dependencias, ejecuta TripoSR y descarga el resultado en formato OBJ.
 
 ## Configuración
 Por defecto `GENERATOR_MODE=colab`. Railway solo aloja la web y prepara el cuaderno. No hace falta configurar Modal ni `GPU_API_URL` para este flujo.
